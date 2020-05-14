@@ -1,88 +1,29 @@
 package main
 
 import (
+	"blm/bloomFilter"
 	"fmt"
 	"github.com/foolin/gin-template"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/lw000/gocommon/db/rdsex"
+	"github.com/lw000/gocommon/utils"
 	"github.com/utrack/gin-csrf"
-	"github.com/willf/bitset"
+
 	"net/http"
 	"time"
 
-	"log"
+	log "github.com/sirupsen/logrus"
 )
 
-const DEFAULT_SIZE = 2 << 24
-
-var seeds = []uint{7, 11, 13, 31, 37, 61}
-
-type SimpleHash struct {
-	cap  uint
-	seed uint
-}
-
-func (s SimpleHash) Hash(value string) uint {
-	var result uint = 0
-	for i := 0; i < len(value); i++ {
-		result = result*s.seed + uint(value[i])
-	}
-	return (s.cap - 1) & result
-}
-
-type BloomFilter struct {
-	b   *bitset.BitSet
-	fns [6]SimpleHash
-}
-
-func New(size uint) *BloomFilter {
-	bf := &BloomFilter{}
-	bf.b = bitset.New(DEFAULT_SIZE)
-	for i := 0; i < len(seeds); i++ {
-		bf.fns[i] = SimpleHash{
-			cap:  DEFAULT_SIZE,
-			seed: seeds[i],
-		}
-	}
-	return bf
-}
-
-func (bf *BloomFilter) Add(value string) {
-	if value == "" {
-		return
-	}
-
-	for _, fn := range bf.fns {
-		bf.b.Set(fn.Hash(value))
-	}
-}
-
-func (bf *BloomFilter) Contains(value string) bool {
-	if value == "" {
-		return false
-	}
-
-	ret := true
-	for _, fn := range bf.fns {
-		ret = bf.b.Test(fn.Hash(value))
-	}
-	return ret
-}
-
-func (bf *BloomFilter) Load(filename string) bool {
-	if filename == "" {
-		return false
-	}
-
-	return true
-}
-
-var bf *BloomFilter
+var bf *bloomf.BloomFilter
 
 func main() {
-	bf := New(DEFAULT_SIZE)
+	log.SetFormatter(&log.TextFormatter{TimestampFormat: "2006-01-02 15:04:05"})
+
+	bf := bloomf.New(bloomf.DEFAULT_SIZE)
 	bf.Add("456")
 	var s = "456"
 	if bf.Contains(s) {
@@ -142,5 +83,42 @@ func main() {
 		c.String(200, csrf.GetToken(c))
 	})
 
+	TestRedis()
+
 	engine.Run(":12580")
+}
+
+func TestRedis() {
+	cfg, err := tyrdsex.LoadJsonConfig("conf/redis.json")
+	if err != nil {
+		log.Panic(err)
+	}
+	log.Println(cfg)
+
+	rds := &tyrdsex.RdsServer{}
+	err = rds.OpenWithJsonConfig(cfg)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	defer func() {
+		_ = rds.Close()
+	}()
+
+	for i := 0; i < 10; i++ {
+		_, _ = rds.Set(fmt.Sprintf("user:name%d", i), "levi", -1)
+	}
+
+	r, err := rds.Get("user:name3")
+	if err != nil {
+		log.Panic(err)
+	}
+
+	log.Println(r)
+
+	for i := 0; i < 10; i++ {
+		token := tyutils.UUID()
+		_, _ = rds.Set("tokens:"+token, "1111", time.Second*time.Duration(300))
+	}
 }
