@@ -27,7 +27,7 @@ func main() {
 	bf.Add("456")
 	var s = "456"
 	if bf.Contains(s) {
-		log.Printf("%s is exists", s)
+		log.Info("%s is exists", s)
 	}
 
 	engine := gin.Default()
@@ -91,14 +91,15 @@ func main() {
 func TestRedis() {
 	cfg, err := tyrdsex.LoadJsonConfig("conf/redis.json")
 	if err != nil {
-		log.Panic(err)
+		log.Error(err)
+		return
 	}
-	log.Println(cfg)
+	log.Info(cfg)
 
 	rds := &tyrdsex.RdsServer{}
 	err = rds.OpenWithJsonConfig(cfg)
 	if err != nil {
-		log.Print(err)
+		log.Error(err)
 		return
 	}
 
@@ -112,10 +113,10 @@ func TestRedis() {
 
 	r, err := rds.Get("user:name3")
 	if err != nil {
-		log.Panic(err)
+		log.Error(err)
+		return
 	}
-
-	log.Println(r)
+	log.Info(r)
 
 	for i := 0; i < 10; i++ {
 		token := tyutils.UUID()
